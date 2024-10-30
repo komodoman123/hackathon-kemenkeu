@@ -2,3 +2,7 @@
 /images
 /venv
 *.png
+backend/openai/api_keys.py
+backend/openai/data_pengadaan_copy.db
+backend/openai/intermediary.db
+backend/openai/intermediary_data.db
