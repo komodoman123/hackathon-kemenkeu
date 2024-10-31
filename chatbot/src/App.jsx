@@ -38,7 +38,9 @@ ChartJS.register(
 );
 
 const ChatbotInterface = () => {
-
+  const EXCLUDED_COLUMNS = [
+    'filtered_keywords',
+  ];
   const chatContainerRef = useRef(null);
   const [messages, setMessages] = useState([
     { role: 'bot', content: 'Hello! I can help you analyze your data. Type anything to start the analysis!' }
@@ -56,7 +58,6 @@ const ChatbotInterface = () => {
   const scrollAreaRef = useRef(null);
   const inputRef = useRef(null);
   const formatBotMessage = (message) => {
-    // Split numbered lists properly
     const formattedMessage = message.replace(/(\d+\. \*\*.*?\*\*:) /g, '$1\n');
     return formattedMessage;
   };
@@ -75,111 +76,189 @@ const ChatbotInterface = () => {
   );
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: "smooth",
+        block: "end",
+      });
     }
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
-  const processDataForVisualization = (data) => {
-    if (!data || !Array.isArray(data) || data.length === 0) return;
+  }, [messages, isLoading]);
 
-    
-    setRawData(data);
+  const isNumeric = (value) => !isNaN(parseFloat(value)) && isFinite(value);
 
-    // Get columns from the first data object
-    const columns = Object.keys(data[0]);
-    
-    
-    const numberColumns = columns.filter(col => 
-      typeof data[0][col] === 'number' || 
-      !isNaN(Number(data[0][col]))
-    );
-
-    const stringColumns = columns.filter(col => 
-      typeof data[0][col] === 'string'
-    );
-
-
-    const valueColumn = numberColumns[0];
-    const labelColumn = stringColumns[0];
-
-    if (valueColumn && labelColumn) {
-      const barChartData = {
-        labels: data.map(item => item[labelColumn]),
-        datasets: [{
-          label: valueColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          data: data.map(item => Number(item[valueColumn])),
-          backgroundColor: data.map((_, index) => {
-            const hue = (index * 360) / data.length;
-            return `hsla(${hue}, 70%, 60%, 0.5)`;
-          }),
-          borderColor: data.map((_, index) => {
-            const hue = (index * 360) / data.length;
-            return `hsla(${hue}, 70%, 60%, 1)`;
-          }),
-          borderWidth: 1,
-        }]
-      };
-
-      setChartTitle(`${valueColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} by ${labelColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
-      setBarData(barChartData);
+  const formatValue = (value, columnName) => {
+    if (columnName === 'kode_rup') {
+      return value;
     }
+    
+    if (isNumeric(value)) {
+      if (value > 1000) {
+        return `Rp ${Number(value).toLocaleString('id-ID')}`;
+      }
+      return value.toLocaleString('id-ID');
+    }
+    return value;
   };
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    const message = inputValue.trim();
-    
-    if (message && !isLoading) {
-      setIsLoading(true);
-      setInputValue('');
-      setMessages(prev => [...prev, { role: 'user', content: message }]);
 
-      if (!showVisualizations) {
-        setIsExpanding(true);
-        setTimeout(() => {
-          setShowVisualizations(true);
-          setIsExpanding(false);
-        }, 300);
+const processDataForVisualization = (data) => {
+  if (!data || !Array.isArray(data) || data.length === 0) return;
+
+  setRawData(data);
+
+
+  const columns = Object.keys(data[0]);
+  
+
+  const numericColumns = columns.filter(col => {
+    const value = data[0][col];
+    return isNumeric(value) && 
+           !['id', '_id', 'kode_rup'].includes(col) && 
+           data.some(row => Number(row[col]) > 0); 
+  });
+
+  const stringColumns = columns.filter(col => 
+    typeof data[0][col] === 'string' &&
+    !['filtered_keywords', 'uraian_pekerjaan', 'spesifikasi_pekerjaan'].includes(col) && 
+    data.some(row => row[col]?.trim().length > 0) 
+  );
+
+  // Choose the best columns for visualization
+  const valueColumn = numericColumns.find(col => 
+    col.toLowerCase().includes('total') ||
+    col.toLowerCase().includes('pagu') ||
+    col.toLowerCase().includes('nilai')
+  ) || numericColumns[0];
+
+  const labelColumn = stringColumns.find(col =>
+    col.toLowerCase().includes('nama') ||
+    col.toLowerCase().includes('satuan_kerja') ||
+    col.toLowerCase().includes('title')
+  ) || stringColumns[0];
+
+  if (valueColumn && labelColumn) {
+
+    const aggregatedData = data.reduce((acc, curr) => {
+      const label = curr[labelColumn];
+      if (!acc[label]) {
+        acc[label] = 0;
+      }
+      acc[label] += Number(curr[valueColumn]);
+      return acc;
+    }, {});
+
+    const barChartData = {
+      labels: Object.keys(aggregatedData),
+      datasets: [{
+        label: valueColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        data: Object.values(aggregatedData),
+        backgroundColor: Object.keys(aggregatedData).map((_, index) => {
+          const hue = (index * 360) / Object.keys(aggregatedData).length;
+          return `hsla(${hue}, 70%, 60%, 0.5)`;
+        }),
+        borderColor: Object.keys(aggregatedData).map((_, index) => {
+          const hue = (index * 360) / Object.keys(aggregatedData).length;
+          return `hsla(${hue}, 70%, 60%, 1)`;
+        }),
+        borderWidth: 1,
+      }]
+    };
+
+    setChartTitle(`${valueColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} by ${labelColumn.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`);
+    setBarData(barChartData);
+  }
+};
+
+const sendMessage = async (e) => {
+  e.preventDefault();
+  const message = inputValue.trim();
+  
+  if (message && !isLoading) {
+    setIsLoading(true);
+    setInputValue('');
+    setMessages(prev => [...prev, { role: 'user', content: message }]);
+
+    if (!showVisualizations) {
+      setIsExpanding(true);
+      setTimeout(() => {
+        setShowVisualizations(true);
+        setIsExpanding(false);
+      }, 300);
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message,
+          session_id: sessionId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      try {
-        const response = await fetch('http://localhost:5000/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message: message,
-            session_id: sessionId
-          }),
-        });
+      const data = await response.json();
+      setMessages(prev => [...prev, { role: 'bot', content: data.response }]);
+      
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setMessages(prev => [...prev, { role: 'bot', content: data.response }]);
+      if (data.data && data.tool_info?.visualization) {
+        const { x_column, y_column, chart_title } = data.tool_info.visualization;
+        console.log(data.tool_info.visualization);
+        const chartData = {
+          labels: data.data.map(item => item[x_column]),
+          datasets: [{
+            label: y_column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            data: data.data.map(item => item[y_column]),
+            backgroundColor: data.data.map((_, index) => {
+              const hue = (index * 360) / data.data.length;
+              return `hsla(${hue}, 70%, 60%, 0.5)`;
+            }),
+            borderColor: data.data.map((_, index) => {
+              const hue = (index * 360) / data.data.length;
+              return `hsla(${hue}, 70%, 60%, 1)`;
+            }),
+            borderWidth: 1,
+          }]
+        };
         
-        if (data.data && Array.isArray(data.data)) {
-          processDataForVisualization(data.data);
-        }
-
-      } catch (error) {
-        console.error('Error:', error);
-        setMessages(prev => [...prev, { 
-          role: 'bot', 
-          content: 'Sorry, there was an error processing your request.' 
-        }]);
-      } finally {
-        setIsLoading(false);
-        inputRef.current?.focus();
+        setBarData(chartData);
+        setChartTitle(chart_title);
+        setRawData(data.data);
+        //processDataForVisualization(data.data);
+      } else if (data.data && Array.isArray(data.data)) {
+        // // Fallback to original process if no visualization info
+        // processDataForVisualization(data.data);
       }
+
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, { 
+        role: 'bot', 
+        content: 'Sorry, there was an error processing your request.' 
+      }]);
+    } finally {
+      setIsLoading(false);
+      inputRef.current?.focus();
     }
-  };
+  }
+};
+
+const CURRENCY_COLUMNS = ['total_pagu', 'nilai', 'harga'];
+
+const formatChartValue = (value, columnName) => {
+  if (CURRENCY_COLUMNS.includes(columnName)) {
+    return `Rp ${value.toLocaleString('id-ID')}`;
+  }
+  return value.toLocaleString('id-ID');
+};
 
   const chartOptions = {
     responsive: true,
@@ -241,12 +320,13 @@ const ChatbotInterface = () => {
             </CardHeader>
             
             <CardContent className="flex-1 p-0" ref={chatContainerRef}>
-              <ScrollArea className="h-[calc(100vh-180px)]">
-                <div className="space-y-4 p-4">
+            <ScrollArea className="h-[calc(100vh-180px)]" >
+              <div className="space-y-4 p-4 min-h-full flex flex-col">
+                <div className="flex-1">
                   {messages.map((message, index) => (
                     <div
                       key={index}
-                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
                     >
                       <div
                         className={`max-w-[80%] rounded-xl p-3 shadow-sm ${
@@ -264,10 +344,11 @@ const ChatbotInterface = () => {
                     </div>
                   ))}
                   {isLoading && <LoadingMessage />}
-                  <div ref={messagesEndRef} />
                 </div>
-              </ScrollArea>
-            </CardContent>
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+          </CardContent>
             
             <CardFooter className="border-t-2 bg-white rounded-b-xl p-3">
               <form onSubmit={sendMessage} className="flex w-full gap-2">
@@ -330,45 +411,49 @@ const ChatbotInterface = () => {
 
                   {/* Raw Data Table */}
                   {rawData ? (
-                    <Card className="border-2 rounded-xl shadow-sm">
-                      <CardHeader className="border-b-2 bg-white rounded-t-xl py-2">
-                        <CardTitle className="text-sm">Raw Data</CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <div className="relative overflow-x-auto">
-                          <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 border-b-2">
-                              <tr>
-                                {Object.keys(rawData[0]).map((column, index) => (
-                                  <th key={index} className="p-2 whitespace-nowrap">{column}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y-2">
-                              {rawData.map((row, rowIndex) => (
-                                <tr key={rowIndex} className="bg-white">
-                                  {Object.values(row).map((value, colIndex) => (
-                                    <td key={colIndex} className="p-2 whitespace-nowrap">
-                                      {typeof value === 'number' 
-                                        ? value.toLocaleString('id-ID')
-                                        : value}
-                                    </td>
-                                  ))}
-                                </tr>
+                  <Card className="border-2 rounded-xl shadow-sm">
+                    <CardHeader className="border-b-2 bg-white rounded-t-xl py-2">
+                      <CardTitle className="text-sm">Raw Data</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="h-[400px] overflow-auto"> {/* Fixed height */}
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-gray-50 border-b-2 sticky top-0"> {/* Make header sticky */}
+                            <tr>
+                              {Object.keys(rawData[0])
+                                .filter(column => !EXCLUDED_COLUMNS.includes(column))
+                                .map((column, index) => (
+                                  <th key={index} className="p-2 whitespace-nowrap bg-gray-50">
+                                    {column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                  </th>
                               ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : isLoading && showVisualizations && (
-                    <Card className="border-2 rounded-xl shadow-sm p-8">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                        <p className="text-sm text-gray-500">Loading data...</p>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y-2">
+                          {rawData.map((row, rowIndex) => (
+                            <tr key={rowIndex} className="bg-white">
+                              {Object.entries(row)
+                                .filter(([key]) => !EXCLUDED_COLUMNS.includes(key))
+                                .map(([columnName, value], colIndex) => (  
+                                  <td key={colIndex} className="p-2 whitespace-nowrap">
+                                    {formatValue(value, columnName)}  
+                                  </td>
+                                ))}
+                            </tr>
+                          ))}
+                          </tbody>
+                        </table>
                       </div>
-                    </Card>
-                  )}
+                    </CardContent>
+                  </Card>
+                ) : isLoading && showVisualizations && (
+                  <Card className="border-2 rounded-xl shadow-sm p-8 h-[400px]">
+                    <div className="flex flex-col items-center justify-center gap-2 h-full">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                      <p className="text-sm text-gray-500">Loading data...</p>
+                    </div>
+                  </Card>
+                )}
                 </div>
               </ScrollArea>
             </div>
