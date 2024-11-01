@@ -2,6 +2,8 @@ import openai
 import json
 import itertools
 import time
+import sqlite3
+import pandas as pd
 from openai import OpenAI
 from list_of_tools import mini_retrieve_similar_keywords, schema_check, intermediary_dataframe_retrieval, bar_chart_tool
 import api_keys
@@ -101,7 +103,8 @@ def execute_tool_call(tool_call):
 
 def get_answer(run, thread):
     spinner = itertools.cycle(['-', '\\', '|', '/'])
-    tool_info = None  # Initialize as None instead of empty dict
+    tool_info = None  
+    chart_df = None 
     
     while run.status != 'completed':
         run = openai.beta.threads.runs.retrieve(
@@ -116,6 +119,14 @@ def get_answer(run, thread):
             for call in tool_calls:
                 if call.function.name == 'bar_chart_tool':
                     args = json.loads(call.function.arguments)
+                    
+                    try:
+                        conn = sqlite3.connect('intermediary.db')
+                        chart_df = pd.read_sql_query(args.get('sql_query'), conn)
+                        conn.close()
+                    except Exception as e:
+                        print(f"Error getting chart data: {e}")
+                    
                     tool_info = {
                         'visualization': {
                             'x_column': args.get('x_column'),
@@ -139,7 +150,11 @@ def get_answer(run, thread):
 
     annotations = messages.data[0].content[0].text.annotations
     message_content = messages.data[0].content[0].text.value
-
+    
+    if chart_df is not None:
+        # Add chart df kalau ada
+        tool_info['chart_data'] = chart_df.to_dict(orient='records')
+        
     return annotations, message_content, tool_info
 
 def add_message(thread, message_content, role):

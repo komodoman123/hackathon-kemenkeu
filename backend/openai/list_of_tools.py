@@ -131,10 +131,7 @@ def bar_chart_tool(
     if y_column not in df.columns:
         return f"Error: Column '{y_column}' not found in DataFrame."
     
-    print("x",x_column)
-    print("y",y_column)
-    print("sql",sql_query)
-    print("title",chart_title)
+
     # Create the bar chart
     plt.figure()
     try:

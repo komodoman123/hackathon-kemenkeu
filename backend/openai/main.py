@@ -13,6 +13,9 @@ from function_definition import (
 )
 from basic_functions import deploy_assistant, add_message, run_assistant, get_answer
 
+# for first time use, deploy assistant and get the assistant.id
+
+
 app = Flask(__name__)
 os.environ['OPENAI_API_KEY'] = api_keys.openai_key
 CORS(app)
@@ -22,7 +25,9 @@ all_tools = [
     intermediary_dataframe_retrieval_definition,
     bar_chart_tool_definition
 ]
-
+# assistant = deploy_assistant(all_tools)
+# assistant_id = assistant.id
+# print(assistant_id)
 threads = {}
 
 def get_intermediary_data():
@@ -48,7 +53,7 @@ def chat():
     
     add_message(thread, question, role='user')
     run = run_assistant(
-        assistant_id="asst_3gKdwwX5uEJKc9RwXHUYenwD",
+        assistant_id="asst_EHnTcqx3F99eeSmaYd3MX0z1",
         thread=thread,
         question=question
     )
@@ -68,7 +73,6 @@ def chat():
     
     if tool_info:  # Only add tool_info if it exists
         response['tool_info'] = tool_info
-    
     return jsonify(response)
 
 if __name__ == '__main__':

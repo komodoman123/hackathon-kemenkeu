@@ -84,7 +84,7 @@ bar_chart_tool_definition = {
         'description': (
             """
             Creates a bar chart from data queried from the 'intermediary_table' in the 'intermediary.db'.
-            
+            if the user doesn't specify the request, always come up with X-axis grouped by month with month's name as the label, and Y-axis is total_pagu.
             - **Inputs**: SQL query, x-axis column, y-axis column, chart title, image filename, and optional image directory.
             - **Output**: Path to the saved image.
 

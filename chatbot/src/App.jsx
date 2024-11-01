@@ -172,6 +172,23 @@ const processDataForVisualization = (data) => {
   }
 };
 
+const formatDateLabel = (value, columnType) => {
+  if (columnType.includes('month_year')|| columnType.includes('year_month')|| columnType.includes('bulan_tahun')|| columnType.includes('bulan')) {
+    // If format is "2024_01"
+    const [year, month] = value.split('_');
+    return new Date(year, month - 1).toLocaleDateString('id-ID', { 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  } else if (columnType.includes('month')) {
+    // If format is "01"
+    return new Date(2024, value - 1).toLocaleDateString('id-ID', { 
+      month: 'long'
+    });
+  }
+  return value; // Return original value if not a date column
+};
+
 const sendMessage = async (e) => {
   e.preventDefault();
   const message = inputValue.trim();
@@ -211,18 +228,19 @@ const sendMessage = async (e) => {
 
       if (data.data && data.tool_info?.visualization) {
         const { x_column, y_column, chart_title } = data.tool_info.visualization;
-        console.log(data.tool_info.visualization);
         const chartData = {
-          labels: data.data.map(item => item[x_column]),
+          labels: data.tool_info.chart_data.map(item => 
+            formatDateLabel(item[x_column], x_column)
+          ),
           datasets: [{
             label: y_column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            data: data.data.map(item => item[y_column]),
-            backgroundColor: data.data.map((_, index) => {
-              const hue = (index * 360) / data.data.length;
+            data: data.tool_info.chart_data.map(item => item[y_column]),
+            backgroundColor: data.tool_info.chart_data.map((_, index) => {
+              const hue = (index * 360) / data.tool_info.chart_data.length;
               return `hsla(${hue}, 70%, 60%, 0.5)`;
             }),
-            borderColor: data.data.map((_, index) => {
-              const hue = (index * 360) / data.data.length;
+            borderColor: data.tool_info.chart_data.map((_, index) => {
+              const hue = (index * 360) / data.tool_info.chart_data.length;
               return `hsla(${hue}, 70%, 60%, 1)`;
             }),
             borderWidth: 1,
