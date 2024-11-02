@@ -211,7 +211,14 @@ def line_chart_tool(
 
     # Define the path for the database
     db_path = 'intermediary.db'
-
+    print("line chart tool:")
+    print(sql_query)
+    print(db_path)
+    print(x_column)
+    print(y_columns)
+    print(x_label)
+    print(y_labels)
+    print(chart_title)
     # Connect to SQLite database and execute the SQL query
     try:
         conn = sqlite3.connect(db_path)
