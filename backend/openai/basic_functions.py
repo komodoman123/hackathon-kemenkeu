@@ -5,64 +5,57 @@ import time
 import sqlite3
 import pandas as pd
 from openai import OpenAI
-from list_of_tools import mini_retrieve_similar_keywords, schema_check, intermediary_dataframe_retrieval, bar_chart_tool
+from list_of_tools import mini_retrieve_similar_keywords, schema_check, intermediary_dataframe_retrieval, bar_chart_tool, line_chart_tool, pie_chart_tool, histogram_tool
 import api_keys
 
 tool_functions = {
     'mini_retrieve_similar_keywords': mini_retrieve_similar_keywords,
     'schema_check': schema_check,
     'intermediary_dataframe_retrieval': intermediary_dataframe_retrieval,
-    'bar_chart_tool': bar_chart_tool
+    'bar_chart_tool': bar_chart_tool,
+    'line_chart_tool': line_chart_tool,
+    'histogram_tool': histogram_tool,
+    'pie_chart_tool': pie_chart_tool,
             }
 
 client = OpenAI(api_key=api_keys.openai_key)
 
-prompt = """Guide the user in retrieving relevant information from a database using keyword similarity.
+prompt = """Guide to Database Retrieval Using Keyword Similarity
 
-You will assist a user by following a structured sequence to retrieve database information based on keyword similarity. Use provided tools to refine keyword search and construct SQL queries.
+You are heplful agent. You are going to use tools until it success or user will say stop.
 
-# Steps
+Assist the user in retrieving database information using keyword similarity and SQL queries, following these structured steps.
 
-1. **New Query Start**: Begin every task from this step to ensure consistency.
-2. **ALWAYS Use the `mini_retrieve_similar_keywords` tool**: Utilize this tool to find keywords similar to the user's query, OTHERWISE THE QUERY WILL FAULT. filtering data relevant to their request.
-3. **Validate and select appropriate keywords**: From the similar keywords returned, select those with high similarity scores (above 0.6). Group them logically based on meaning and their relationship to the user's request.
-4. **Check database information**: Use the `schema_check` tool to understand the database table structure before querying.
-5. **Construct a SQL query**:
-   - Use the validated keywords to filter entries in the 'filtered_keywords' column.
-   - Apply logical operators: use `OR` for synonyms and `AND` for non-synonyms. Exclude the word 'pengadaan'.
-   - Use filtering based on user's query such as using satuan kerja or nama dinas in 'satuan_kerja' column, and based on time in the 'tanggal_umumkan_paket' column.
-   - Follow examples for query construction.
+Process Steps:
 
-6. **Execute query**: Use the `intermediary_dataframe_retrieval` tool to run the constructed query and retrieve data.
-7. **Retrieve Graph**: If the user asking a graphic, use the respective visualization tools.
+1. Start New Query: Begin each task with this step to maintain consistency.
+2. Use mini_retrieve_similar_keywords tool: This tool identifies similar keywords for the user's query. Using this is essential; otherwise, the query may fail.
+3. Keyword Selection: Choose keywords with similarity scores above 0.6, grouping them by meaning or relationship to the user’s request.
+4. Schema Check: Run schema_check to understand the database structure.
+5. SQL Query Construction:
+Use selected keywords to filter 'filtered_keywords' with logical operators (OR for synonyms, AND for non-synonyms). Exclude 'pengadaan.'
+6. Apply filters in 'satuan_kerja' and 'tanggal_umumkan_paket' columns based on the user's input.
+7. Query Execution: Use intermediary_dataframe_retrieval to execute the query and retrieve data.
+8. Graph Requests: If user requests visualization, use corresponding tools: bar chart, line chart, pie chart, then histogram.
 
-# Examples
+SPECIAL REQUEST: If User said "SIRUPA TAMPILKAN GRAFIK {USER QUERY}", GIVE ALL 4 CHARTS FOR THE QUERY BAR, LINE, PIE AND HISTOGRAM. 
 
-**User Request:** "informasi terkait perbaikan gedung"  
-- **Group 1:** 'perbaikan', 'rehabilitasi', 'pemeliharaan'  
-- **Group 2:** 'gedung', 'bangunan', 'kantor'  
-- **Query Result:**  
-  ```plaintext
-  SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%perbaikan%' OR filtered_keywords LIKE '%rehabilitasi%' OR filtered_keywords LIKE '%pemeliharaan%') AND (filtered_keywords LIKE '%gedung%' OR filtered_keywords LIKE '%bangunan%' OR filtered_keywords LIKE '%kantor%');
-  ```
-  (In practice, results will vary based on database contents.)
+Example Queries:
 
-**User Request:** "informasi terkait alat tulis "  
-- **Group 1:** 'alat', 'peralatan'  
-- **Group 2:** 'tulis', 'pensil', 'pulpen'  
-- **Query Result:**  
-  ```plaintext
-  SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%alat%' OR filtered_keywords LIKE '%peralatan%') AND (filtered_keywords LIKE '%tulis%' OR filtered_keywords LIKE '%pensil%' OR filtered_keywords LIKE '%pulpen%');
-  ```
-  (In practice, results will vary based on database contents.)
+User Request: "informasi terkait perbaikan gedung"
+similar keywords: perbaikan, rehabilitasi, pemeliharaan, gedung, bangunan, kantor
+SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%perbaikan%' OR filtered_keywords LIKE '%rehabilitasi%' OR filtered_keywords LIKE '%pemeliharaan%') AND (filtered_keywords LIKE '%gedung%' OR filtered_keywords LIKE '%bangunan%' OR filtered_keywords LIKE '%kantor%');
 
-# Notes
+User Request: "informasi terkait alat tulis"
+similar keywords: alat, peralatan, tulis, penulisan
+SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%alat%' OR filtered_keywords LIKE '%peralatan%') AND (filtered_keywords LIKE '%tulis%' OR filtered_keywords LIKE '%penulisan%');
 
-- Ensure each step is completed without omissions.
-- Call one tool at a time. Don't call two tools at the same time. Follow the step carefully.
-- **Do NOT include any irrelevant information to the user** such as which steps you took.
-- Avoid performing DML operations such as INSERT, UPDATE, DELETE, or DROP.
-- Where feasible, respond directly with known information rather than performing unnecessary operations.
+Notes:
+1. Complete each step without omissions.
+2. Use one tool at a time; follow the steps precisely.
+3. Error in using tools is NORMAL. TRY AGAIN UNTIL IT COMPLETE OR USER STOP IT.
+3. Do not include unnecessary details in responses.
+4. Avoid DML operations (INSERT, UPDATE, DELETE, DROP).
 """
 
 def deploy_assistant(all_tools):
@@ -103,59 +96,62 @@ def execute_tool_call(tool_call):
 
 def get_answer(run, thread):
     spinner = itertools.cycle(['-', '\\', '|', '/'])
-    tool_info = None  
+    charts_info = []
     chart_df = None 
     
     while run.status != 'completed':
-        run = openai.beta.threads.runs.retrieve(
-            thread_id = thread.id,
-            run_id = run.id
-        )
-    
-        print(f"\rRun status: {run.status} {next(spinner)}", end="", flush=True)
-        time.sleep(0.1)
+        try:
+            run = openai.beta.threads.runs.retrieve(
+                thread_id=thread.id,
+                run_id=run.id
+            )
+            print(f"\rRun status: {run.status} {next(spinner)}", end="", flush=True)
+            time.sleep(0.1)
+        except Exception as e:
+            print(f"Error retrieving run status: {e}")
+            continue
+        
         if run.status == 'requires_action':
             tool_calls = run.required_action.submit_tool_outputs.tool_calls
+            
             for call in tool_calls:
-                if call.function.name == 'bar_chart_tool':
-                    args = json.loads(call.function.arguments)
-                    
+                args = json.loads(call.function.arguments)
+                
+                if call.function.name in ['bar_chart_tool', 'line_chart_tool', 'pie_chart_tool', 'histogram_tool']:
                     try:
                         conn = sqlite3.connect('intermediary.db')
                         chart_df = pd.read_sql_query(args.get('sql_query'), conn)
-                        conn.close()
                     except Exception as e:
                         print(f"Error getting chart data: {e}")
+                    finally:
+                        conn.close()
                     
-                    tool_info = {
-                        'visualization': {
-                            'x_column': args.get('x_column'),
-                            'y_column': args.get('y_column'),
-                            'sql_query': args.get('sql_query'),
-                            'chart_title': args.get('chart_title')
-                        }
-                    }
+                    chart_info = build_chart_info(call.function.name, args)
+                    if chart_info and chart_df is not None:
+                        chart_info['chart_data'] = chart_df.to_dict(orient='records')
+                        charts_info.append(chart_info)
             
             tool_outputs = [execute_tool_call(call) for call in tool_calls]
             
-            run = client.beta.threads.runs.submit_tool_outputs(
-                thread_id = thread.id,
-                run_id = run.id,
-                tool_outputs=tool_outputs
-            )
-
-    messages = openai.beta.threads.messages.list(
-        thread_id=thread.id
-    )
-
-    annotations = messages.data[0].content[0].text.annotations
-    message_content = messages.data[0].content[0].text.value
+            try:
+                run = client.beta.threads.runs.submit_tool_outputs(
+                    thread_id=thread.id,
+                    run_id=run.id,
+                    tool_outputs=tool_outputs
+                )
+            except Exception as e:
+                print(f"Error submitting tool outputs: {e}")
+                break
     
-    if chart_df is not None:
-        # Add chart df kalau ada
-        tool_info['chart_data'] = chart_df.to_dict(orient='records')
-        
-    return annotations, message_content, tool_info
+    try:
+        messages = openai.beta.threads.messages.list(thread_id=thread.id)
+        annotations = messages.data[0].content[0].text.annotations
+        message_content = messages.data[0].content[0].text.value
+    except Exception as e:
+        print(f"Error retrieving messages: {e}")
+        return None, None, charts_info
+    
+    return annotations, message_content, charts_info
 
 def add_message(thread, message_content, role):
     return client.beta.threads.messages.create(
@@ -163,3 +159,50 @@ def add_message(thread, message_content, role):
         role=role,
         content=message_content,
     )
+    
+def build_chart_info(chart_type, args):
+    if chart_type == 'bar_chart_tool':
+        return {
+            'type': 'bar',
+            'visualization': {
+                'x_column': args.get('x_column'),
+                'y_column': args.get('y_column'),
+                'sql_query': args.get('sql_query'),
+                'chart_title': args.get('chart_title')
+            }
+        }
+    elif chart_type == 'line_chart_tool':
+        return {
+            'type': 'line',
+            'visualization': {
+                'x_column': args.get('x_column'),
+                'y_columns': args.get('y_columns'),
+                'x_label': args.get('x_label'),
+                'y_labels': args.get('y_labels'),
+                'chart_title': args.get('chart_title'),
+                'sql_query': args.get('sql_query')
+            }
+        }
+    elif chart_type == 'pie_chart_tool':
+        return {
+            'type': 'pie',
+            'visualization': {
+                'label_column': args.get('label_column'),
+                'value_column': args.get('value_column'),
+                'chart_title': args.get('chart_title'),
+                'sql_query': args.get('sql_query')
+            }
+        }
+    elif chart_type == 'histogram_tool':
+        return {
+            'type': 'histogram',
+            'visualization': {
+                'x_column': args.get('x_column'),
+                'x_label': args.get('x_label'),
+                'y_label': args.get('y_label'),
+                'chart_title': args.get('chart_title'),
+                'bins': args.get('bins', 12),
+                'sql_query': args.get('sql_query')
+            }
+        }
+    return None    

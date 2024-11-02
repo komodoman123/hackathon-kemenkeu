@@ -9,7 +9,10 @@ from function_definition import (
     mini_retrieve_similar_keywords_definition,
     intermediary_dataframe_retrieval_definition,
     schema_check_definition,
-    bar_chart_tool_definition
+    bar_chart_tool_definition,
+    line_chart_tool_definition,
+    histogram_tool_definition,
+    pie_chart_tool_definition
 )
 from basic_functions import deploy_assistant, add_message, run_assistant, get_answer
 
@@ -18,13 +21,15 @@ from basic_functions import deploy_assistant, add_message, run_assistant, get_an
 
 app = Flask(__name__)
 os.environ['OPENAI_API_KEY'] = api_keys.openai_key
+
 CORS(app)
-all_tools = [
-    mini_retrieve_similar_keywords_definition,
-    schema_check_definition,
-    intermediary_dataframe_retrieval_definition,
-    bar_chart_tool_definition
-]
+all_tools = [mini_retrieve_similar_keywords_definition, 
+             schema_check_definition, 
+             intermediary_dataframe_retrieval_definition, 
+             bar_chart_tool_definition,
+             line_chart_tool_definition,
+             histogram_tool_definition,
+             pie_chart_tool_definition]
 # assistant = deploy_assistant(all_tools)
 # assistant_id = assistant.id
 # print(assistant_id)
@@ -53,11 +58,11 @@ def chat():
     
     add_message(thread, question, role='user')
     run = run_assistant(
-        assistant_id="asst_EHnTcqx3F99eeSmaYd3MX0z1",
+        assistant_id="asst_2Pna3kraHtUxZZSBXRljNQJM",
         thread=thread,
         question=question
     )
-    annotations, message_content, tool_info = get_answer(run, thread)
+    annotations, message_content, charts_info = get_answer(run, thread)  
     add_message(thread, message_content, role='assistant')
     
     # Get intermediary data if it exists
@@ -71,8 +76,12 @@ def chat():
     if df_data:
         response['data'] = df_data
     
-    if tool_info:  # Only add tool_info if it exists
-        response['tool_info'] = tool_info
+
+    if charts_info:
+        if not isinstance(charts_info, list):
+            charts_info = [charts_info]  
+        response['charts_info'] = charts_info
+    
     return jsonify(response)
 
 if __name__ == '__main__':
