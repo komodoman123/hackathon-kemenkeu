@@ -13,7 +13,7 @@ import { Input } from "../components/ui/input";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement, ArcElement } from 'chart.js';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import ReactMarkdown from 'react-markdown';
-
+import io from 'socket.io-client';
 
 const LoadingMessage = () => (
   <div className="flex justify-start">
@@ -56,8 +56,27 @@ const ChatbotInterface = () => {
   const [inputValue, setInputValue] = useState('');
   const [chartsInfo, setChartsInfo] = useState([]);
   const messagesEndRef = useRef(null);
-
+  const [charts, setCharts] = useState({});
   const inputRef = useRef(null);
+  const [placeholderText, setPlaceholderText] = useState("Type anything to generate analysis...");
+  
+
+  const updateCharts = (newCharts, replaceAll = false) => {
+    setCharts((prevCharts) => {
+      const updatedCharts = replaceAll ? {} : { ...prevCharts };
+  
+      newCharts.forEach((newChart) => {
+        const chartKey = newChart.type; 
+        updatedCharts[chartKey] = newChart; 
+      });
+  
+      return updatedCharts;
+    });
+  };
+
+
+
+
   const formatBotMessage = (message) => {
     const formattedMessage = message.replace(/(\d+\. \*\*.*?\*\*:) /g, '$1\n');
     return formattedMessage;
@@ -186,8 +205,8 @@ case 'pie':
   datasets = [
     {
       //label: chart_title, // Dataset label (optional, can be omitted if unnecessary)
-      data: chart_data.map((item) => item[visualization.value_column]), // Values for each slice
-      backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56'], // Colors for each slice
+      data: chart_data.map((item) => item[visualization.value_column]), 
+      backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56'], 
     }
     
   ];
@@ -198,9 +217,41 @@ case 'pie':
   }
 };
 
+const floatingLegendPlugin = {
+  id: 'floatingLegend',
+  afterDraw(chart) {
+    if (chart.config.type !== 'pie') return;
 
+    const { ctx, data, chartArea: { top, left, right, bottom } } = chart;
+    const centerX = (left + right) / 2;
+    const centerY = (top + bottom) / 2;
+    const radius = Math.min(right - left, bottom - top) / 2;
+    
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
 
-const getChartOptions = (type, chartTitle) => ({
+    const totalValue = data.datasets[0].data.reduce((a, b) => a + b, 0);
+    let startAngle = -0.5 * Math.PI; // angle start
+
+    data.datasets[0].data.forEach((value, index) => {
+      const angle = (value / totalValue) * 2 * Math.PI;
+      const midAngle = startAngle + angle / 2;
+      
+      // posisi lael setiap edge dari pie slice
+      const labelX = centerX + (radius * 0.8) * Math.cos(midAngle);
+      const labelY = centerY + (radius * 0.8) * Math.sin(midAngle);
+
+      // draw label 
+      ctx.fillStyle = data.datasets[0].backgroundColor[index];
+      ctx.fillText(data.labels[index], labelX, labelY);
+      console.log(ctx.fillStyle);
+      startAngle += angle; 
+    });
+  }
+};
+
+const getChartOptions = (type) => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: {
@@ -209,20 +260,18 @@ const getChartOptions = (type, chartTitle) => ({
   },
   plugins: {
     legend: {
-      //display: type !== 'pie', 
-      position: 'top', 
-      labels: {
-        boxWidth: 15,
-        font: { size: 11 }
-      }
+      display: true, 
     },
+    // title: {
+    //   display: true,
+    //   text: chartTitle,
+    //   font: { size: 13 }
+    // },
     title: {
-      display: true,
-      text: chartTitle,
-      font: { size: 13 }
+      display: false,
     },
+    floatingLegend: type === 'pie' ? floatingLegendPlugin : undefined, //  custom floating legend
   },
-
   scales: type === 'pie' ? undefined : {
     y: {
       beginAtZero: true,
@@ -303,7 +352,8 @@ const sendMessage = async (e) => {
 
       if (data.data && data.charts_info) {
         setRawData(data.data);
-        setChartsInfo(data.charts_info);
+        //setChartsInfo(data.charts_info);
+        updateCharts(data.charts_info);
         //const { x_column, y_column, chart_title } = data.tool_info.visualization;
         // const chartData = {
         //   labels: data.tool_info.chart_data.map(item => 
@@ -472,7 +522,7 @@ const formatChartValue = (value, columnName) => {
               </form>
             </CardFooter>
           </Card>
-        ) : (
+        ) : ( // actual interface
           // New  layout
           <div className="flex flex-col h-screen gap-4">
             {/* Main Content  */}
@@ -491,12 +541,12 @@ const formatChartValue = (value, columnName) => {
                             <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                             <p className="text-sm text-gray-500">Preparing visualization...</p>
                           </div>
-                        ) : chartsInfo.length > 0 ? (
+                        ) : Object.keys(charts).length > 0 ? (
                           <div className="grid gap-4" style={{ 
-                            gridTemplateColumns: `repeat(2, 1fr)`, // Set to 2 columns for 2x2 grid layout
-                            gridTemplateRows: `repeat(${Math.ceil(chartsInfo.length / 2)}, 1fr)`, // Adjust rows based on the number of charts
+                            gridTemplateColumns: `repeat(2, 1fr)`,
+                            gridTemplateRows: `repeat(${Math.ceil(Object.keys(charts).length / 2)}, 1fr)`
                           }}>
-                            {chartsInfo.slice(0, 4).map((chart, index) => ( // Limit to maximum of 4 charts
+                            {Object.values(charts).map((chart, index) => (
                               <div key={index} className="border rounded shadow-sm p-2">
                                 <CardHeader className="border-b-2 bg-white rounded-t-xl py-1">
                                   <CardTitle className="text-xs">{chart.visualization.chart_title}</CardTitle>
@@ -517,7 +567,7 @@ const formatChartValue = (value, columnName) => {
                   </Card>
                 </ScrollArea>
               </div>
-                
+                              
               {/* Raw Data Table - right side */}
               <div className="w-1/3">
                 <Card className="border-2 rounded-xl shadow-sm">
@@ -617,7 +667,7 @@ const formatChartValue = (value, columnName) => {
                       ref={inputRef}
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
-                      placeholder={isLoading ? "Processing..." : "Type anything to generate analysis..."}
+                      placeholder={isLoading ? placeholderText : "Type anything to generate analysis..."}
                       className="flex-1 border-2"
                       disabled={isLoading}
                     />
