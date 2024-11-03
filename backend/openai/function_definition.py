@@ -33,18 +33,14 @@ intermediary_dataframe_retrieval_definition = {
         'name': 'intermediary_dataframe_retrieval',
         'description': (
             """
-            To use this tool, you need to use keywords from 'mini_retrieve_similar_keywords'.
-            Retrieve data from the database using a SQL query based on grouped keywords with `AND` between groups and `OR` within each group.
-            - **Example 1:** For "informasi terkait perbaikan gedung," use:
-              ```sql
-              SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%perbaikan%' OR filtered_keywords LIKE '%rehabilitasi%' OR filtered_keywords LIKE '%pemeliharaan%') 
-              AND (filtered_keywords LIKE '%gedung%' OR filtered_keywords LIKE '%bangunan%' OR filtered_keywords LIKE '%kantor%');
-              ```
-            - **Example 2:** For "informasi terkait alat tulis," use:
-              ```sql
-              SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%alat%' OR filtered_keywords LIKE '%peralatan%') 
-              AND (filtered_keywords LIKE '%tulis%' OR filtered_keywords LIKE '%penulisan%');
-              ```
+            To use this tool, use keywords from 'mini_retrieve_similar_keywords'
+            then retrieve data using SQL queries structured as follows:
+            - **1st Query:** For "informasi terkait perbaikan gedung":
+            SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%perbaikan%' OR filtered_keywords LIKE '%rehabilitasi%' OR filtered_keywords LIKE '%pemeliharaan%') 
+            AND (filtered_keywords LIKE '%gedung%' OR filtered_keywords LIKE '%bangunan%' OR filtered_keywords LIKE '%kantor%');
+            - **Follow up Question:** For "keluarkan informasi terkait alat atau peralatan" use:
+            SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%perbaikan%' OR filtered_keywords LIKE '%rehabilitasi%' OR filtered_keywords LIKE '%pemeliharaan%') 
+            AND (filtered_keywords LIKE '%gedung%' OR filtered_keywords LIKE '%bangunan%' OR filtered_keywords LIKE '%kantor%') AND NOT (filtered_keywords LIKE '%alat%' OR filtered_keywords LIKE '%peralatan%');
             """
         ),
         'parameters': {
@@ -167,7 +163,7 @@ line_chart_tool_definition = {
             y_labels: list = ["Total Budget (Rp Billion)", "Number of Packages"],
             chart_title: str = "Procurement Trends Over Time",
             image_filename: str = "procurement_trends.png",
-            image_directory: str = './images',
+            image_directory = "./images"
             figsize: tuple = (12, 6)
         """,
         'parameters': {
