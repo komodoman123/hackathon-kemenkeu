@@ -10,3 +10,5 @@ backend/openai/__pycache__/api_keys.cpython-312.pyc
 backend/openai/__pycache__/basic_functions.cpython-312.pyc
 backend/openai/__pycache__/function_definition.cpython-312.pyc
 backend/openai/__pycache__/list_of_tools.cpython-312.pyc
+backend/openai/__pycache__/main.cpython-312.pyc
+backend/openai/__pycache__/socket_utils.cpython-312.pyc
