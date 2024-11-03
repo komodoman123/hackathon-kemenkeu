@@ -602,61 +602,12 @@ const formatChartValue = (value, columnName) => {
                               
               {/* Raw Data Table - right side */}
               <div className="w-1/3">
-                <Card className="border-2 rounded-xl shadow-sm">
-                  <CardHeader className="border-b-2 bg-white rounded-t-xl py-2">
-                    <CardTitle className="text-sm">Raw Data</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {rawData ? (
-                      <div className="h-[calc(100vh-300px)] overflow-auto">
-                        <table className="w-full text-left text-sm">
-                          <thead className="bg-gray-50 border-b-2 sticky top-0">
-                            <tr>
-                              {Object.keys(rawData[0])
-                                .filter(column => !EXCLUDED_COLUMNS.includes(column))
-                                .map((column, index) => (
-                                  <th key={index} className="p-2 whitespace-nowrap bg-gray-50">
-                                    {column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                  </th>
-                                ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y-2">
-                            {rawData.map((row, rowIndex) => (
-                              <tr key={rowIndex} className="bg-white">
-                                {Object.entries(row)
-                                  .filter(([key]) => !EXCLUDED_COLUMNS.includes(key))
-                                  .map(([columnName, value], colIndex) => (
-                                    <td key={colIndex} className="p-2 whitespace-nowrap">
-                                      {formatValue(value, columnName)}
-                                    </td>
-                                  ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : isLoading && (
-                      <div className="h-[calc(100vh-300px)] flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                          <p className="text-sm text-gray-500">Loading data...</p>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-  
-            {/* Chat Interface asli- Bottom */}
-            <div className="h-[250px]">
               <Card className="border-2 rounded-xl shadow-sm h-full">
                 <CardHeader className="border-b-2 bg-white rounded-t-xl py-2">
                   <CardTitle>Data Analysis Assistant</CardTitle>
                 </CardHeader>
                 <CardContent className="flex-1 p-0" ref={chatContainerRef}>
-                  <ScrollArea className="h-[calc(250px-120px)]">
+                  <ScrollArea className="h-[calc(720px-120px)]">
                     <div className="space-y-4 p-4 min-h-full flex flex-col">
                       <div className="flex-1">
                       {messages.map((message, index) => (
@@ -723,6 +674,55 @@ const formatChartValue = (value, columnName) => {
                   </form>
                 </CardFooter>
               </Card>
+              </div>
+            </div>
+  
+            {/* Chat Interface asli- Bottom */}
+            <div className="h-[250px]">
+            <Card className="border-2 rounded-xl shadow-sm">
+                  <CardHeader className="border-b-2 bg-white rounded-t-xl py-2">
+                    <CardTitle className="text-sm">Raw Data</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    {rawData ? (
+                      <div className="h-[calc(100vh-300px)] overflow-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-gray-50 border-b-2 sticky top-0">
+                            <tr>
+                              {Object.keys(rawData[0])
+                                .filter(column => !EXCLUDED_COLUMNS.includes(column))
+                                .map((column, index) => (
+                                  <th key={index} className="p-2 whitespace-nowrap bg-gray-50">
+                                    {column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                  </th>
+                                ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y-2">
+                            {rawData.map((row, rowIndex) => (
+                              <tr key={rowIndex} className="bg-white">
+                                {Object.entries(row)
+                                  .filter(([key]) => !EXCLUDED_COLUMNS.includes(key))
+                                  .map(([columnName, value], colIndex) => (
+                                    <td key={colIndex} className="p-2 whitespace-nowrap">
+                                      {formatValue(value, columnName)}
+                                    </td>
+                                  ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : isLoading && (
+                      <div className="h-[calc(100vh-300px)] flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                          <p className="text-sm text-gray-500">Loading data...</p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
             </div>
           </div>
         )}
