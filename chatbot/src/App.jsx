@@ -15,12 +15,12 @@ import { Bar, Line, Pie } from 'react-chartjs-2';
 import ReactMarkdown from 'react-markdown';
 import io from 'socket.io-client';
 
-const LoadingMessage = () => (
+const LoadingMessage = ({ message }) => (
   <div className="flex justify-start">
     <div className="max-w-[80%] rounded-xl p-3 shadow-sm bg-white border-2 border-gray-100">
       <div className="flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-        <span className="text-sm text-gray-500">Analyzing data...</span>
+        <span className="text-sm text-gray-500">{message || "Analyzing data..."}</span>
       </div>
     </div>
   </div>
@@ -59,7 +59,7 @@ const ChatbotInterface = () => {
   const [charts, setCharts] = useState({});
   const inputRef = useRef(null);
   const [placeholderText, setPlaceholderText] = useState("Type anything to generate analysis...");
-  
+  const socketRef = useRef(null);
 
   const updateCharts = (newCharts, replaceAll = false) => {
     setCharts((prevCharts) => {
@@ -123,7 +123,38 @@ const ChatbotInterface = () => {
     return value;
   };
 
+  useEffect(() => {
 
+    socketRef.current = io('http://localhost:5000', {
+      transports: ['websocket'],
+      upgrade: false
+    });
+    
+
+    socketRef.current.on('progress', (data) => {
+      if (data.session_id === sessionId) {
+
+        setMessages(prev => {
+          const newMessages = [...prev];
+
+          const loadingIndex = newMessages.findIndex(msg => msg.role === 'loading');
+          if (loadingIndex !== -1) {
+            newMessages[loadingIndex] = { role: 'loading', content: data.message };
+          } else {
+            newMessages.push({ role: 'loading', content: data.message });
+          }
+          return newMessages;
+        });
+      }
+    });
+    
+    // Cleanup 
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, [sessionId]);
 
 const renderChart = (chart) => {
   const { chart_data, type, visualization } = chart;
@@ -204,7 +235,7 @@ case 'pie':
   console.log("chart_data", chart_data); 
   datasets = [
     {
-      //label: chart_title, // Dataset label (optional, can be omitted if unnecessary)
+      //label: chart_title, 
       data: chart_data.map((item) => item[visualization.value_column]), 
       backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56'], 
     }
@@ -379,7 +410,7 @@ const sendMessage = async (e) => {
         
         //processDataForVisualization(data.data);
       } else if (data.data && Array.isArray(data.data)) {
-        // // Fallback to original process if no visualization info
+
         // processDataForVisualization(data.data);
       }
 
@@ -389,8 +420,9 @@ const sendMessage = async (e) => {
         role: 'bot', 
         content: 'Sorry, there was an error processing your request.' 
       }]);
-    } finally {
+    }  finally {
       setIsLoading(false);
+      setMessages(prev => prev.filter(m => m.role !== 'loading'));
       inputRef.current?.focus();
     }
   }
@@ -617,7 +649,7 @@ const formatChartValue = (value, columnName) => {
               </div>
             </div>
   
-            {/* Chat Interface - Bottom */}
+            {/* Chat Interface asli- Bottom */}
             <div className="h-[250px]">
               <Card className="border-2 rounded-xl shadow-sm h-full">
                 <CardHeader className="border-b-2 bg-white rounded-t-xl py-2">
@@ -627,27 +659,32 @@ const formatChartValue = (value, columnName) => {
                   <ScrollArea className="h-[calc(250px-120px)]">
                     <div className="space-y-4 p-4 min-h-full flex flex-col">
                       <div className="flex-1">
-                        {messages.map((message, index) => (
+                      {messages.map((message, index) => (
+                        <div
+                          key={index}
+                          className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
+                        >
                           <div
-                            key={index}
-                            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
+                            className={`max-w-[80%] rounded-xl p-3 shadow-sm ${
+                              message.role === 'user'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white border-2 border-gray-100'
+                            }`}
                           >
-                            <div
-                              className={`max-w-[80%] rounded-xl p-3 shadow-sm ${
-                                message.role === 'user'
-                                  ? 'bg-blue-500 text-white'
-                                  : 'bg-white border-2 border-gray-100'
-                              }`}
-                            >
-                              {message.role === 'user' ? (
-                                message.content
-                              ) : (
-                                <BotMessage content={message.content} />
-                              )}
-                            </div>
+                            {message.role === 'user' ? (
+                              message.content
+                            ) : message.role === 'loading' ? (
+                              <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                                <span className="text-sm text-gray-500">{message.content}</span>
+                              </div>
+                            ) : (
+                              <BotMessage content={message.content} />
+                            )}
                           </div>
-                        ))}
-                        {isLoading && <LoadingMessage />}
+                        </div>
+                      ))}
+                      {isLoading && !messages.find(m => m.role === 'loading') && <LoadingMessage />}
                       </div>
                       <div ref={messagesEndRef} />
                     </div>
