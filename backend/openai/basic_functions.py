@@ -4,6 +4,7 @@ import itertools
 import time
 import sqlite3
 import pandas as pd
+from datetime import datetime
 from openai import OpenAI
 from list_of_tools import mini_retrieve_similar_keywords, schema_check, intermediary_dataframe_retrieval, bar_chart_tool, line_chart_tool, pie_chart_tool, histogram_tool
 import api_keys
@@ -28,27 +29,26 @@ Assist the user in retrieving database information using keyword similarity and 
 
 Process Steps:
 
-1. Start New Query: Begin each task with this step to maintain consistency.
+1. SPECIAL REQUEST: If User said "SIRUPA TAMPILKAN GRAFIK {USER QUERY}", Prepare to GIVE ALL 4 CHARTS FOR THE QUERY BAR, LINE, PIE AND HISTOGRAM.
 2. Use mini_retrieve_similar_keywords tool: This tool identifies similar keywords for the user's query. Using this is essential; otherwise, the query may fail.
 3. Keyword Selection: Choose keywords with similarity scores above 0.6, grouping them by meaning or relationship to the user’s request.
 4. Schema Check: Run schema_check to understand the database structure.
 5. SQL Query Construction:
-Use selected keywords to filter 'filtered_keywords' with logical operators (OR for synonyms, AND for non-synonyms). Exclude 'pengadaan.'
-6. Apply filters in 'satuan_kerja' and 'tanggal_umumkan_paket' columns based on the user's input.
-7. Query Execution: Use intermediary_dataframe_retrieval to execute the query and retrieve data.
+Use selected keywords to filter 'filtered_keywords' with logical operators (OR for synonyms, AND for non-synonyms).
+Apply filters in 'satuan_kerja' and 'tanggal_umumkan_paket' columns based on the user's input.
+6. Query Execution: Use intermediary_dataframe_retrieval to execute the query and retrieve data.
+7. Use AND NOT if USER wants to EXCLUDE information.
 8. Graph Requests: If user requests visualization, use corresponding tools: bar chart, line chart, pie chart, then histogram.
-
-SPECIAL REQUEST: If User said "SIRUPA TAMPILKAN GRAFIK {USER QUERY}", GIVE ALL 4 CHARTS FOR THE QUERY BAR, LINE, PIE AND HISTOGRAM. 
 
 Example Queries:
 
-User Request: "informasi terkait perbaikan gedung"
+First Request: "informasi terkait perbaikan gedung"
 similar keywords: perbaikan, rehabilitasi, pemeliharaan, gedung, bangunan, kantor
 SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%perbaikan%' OR filtered_keywords LIKE '%rehabilitasi%' OR filtered_keywords LIKE '%pemeliharaan%') AND (filtered_keywords LIKE '%gedung%' OR filtered_keywords LIKE '%bangunan%' OR filtered_keywords LIKE '%kantor%');
 
-User Request: "informasi terkait alat tulis"
-similar keywords: alat, peralatan, tulis, penulisan
-SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%alat%' OR filtered_keywords LIKE '%peralatan%') AND (filtered_keywords LIKE '%tulis%' OR filtered_keywords LIKE '%penulisan%');
+Follow Up Question: "keluarkan informasi terkait alat atau peralatan"
+similar keywords: perbaikan, rehabilitasi, pemeliharaan, gedung, bangunan, kantor
+SELECT * FROM data_pengadaan WHERE (filtered_keywords LIKE '%perbaikan%' OR filtered_keywords LIKE '%rehabilitasi%' OR filtered_keywords LIKE '%pemeliharaan%') AND (filtered_keywords LIKE '%gedung%' OR filtered_keywords LIKE '%bangunan%' OR filtered_keywords LIKE '%kantor%') AND NOT (filtered_keywords LIKE '%alat%' OR filtered_keywords LIKE '%peralatan%');
 
 Notes:
 1. Complete each step without omissions.
@@ -57,6 +57,7 @@ Notes:
 3. Do not include unnecessary details in responses.
 4. Avoid DML operations (INSERT, UPDATE, DELETE, DROP).
 """
+progress_updates = {}
 
 def deploy_assistant(all_tools):
     assistant = client.beta.assistants.create(
@@ -94,10 +95,9 @@ def execute_tool_call(tool_call):
             'output': output
         }
 
-def get_answer(run, thread):
-    spinner = itertools.cycle(['-', '\\', '|', '/'])
+def get_answer(run, thread, progress_callback=None):
     charts_info = []
-    chart_df = None 
+    chart_df = None
     
     while run.status != 'completed':
         try:
@@ -105,53 +105,58 @@ def get_answer(run, thread):
                 thread_id=thread.id,
                 run_id=run.id
             )
-            print(f"\rRun status: {run.status} {next(spinner)}", end="", flush=True)
-            time.sleep(0.1)
-        except Exception as e:
-            print(f"Error retrieving run status: {e}")
-            continue
-        
-        if run.status == 'requires_action':
-            tool_calls = run.required_action.submit_tool_outputs.tool_calls
             
-            for call in tool_calls:
-                args = json.loads(call.function.arguments)
+            if run.status == 'requires_action':
+                tool_calls = run.required_action.submit_tool_outputs.tool_calls
                 
-                if call.function.name in ['bar_chart_tool', 'line_chart_tool', 'pie_chart_tool', 'histogram_tool']:
-                    try:
-                        conn = sqlite3.connect('intermediary.db')
-                        chart_df = pd.read_sql_query(args.get('sql_query'), conn)
-                    except Exception as e:
-                        print(f"Error getting chart data: {e}")
-                    finally:
-                        conn.close()
+                for call in tool_calls:
+                    # Send tool usage update
+                    print(f"Processing tool: {call.function.name}")
+                    if progress_callback:
+                        progress_callback('tool_usage', f"Using tool: {call.function.name}")
                     
-                    chart_info = build_chart_info(call.function.name, args)
-                    if chart_info and chart_df is not None:
-                        chart_info['chart_data'] = chart_df.to_dict(orient='records')
-                        charts_info.append(chart_info)
+                    args = json.loads(call.function.arguments)
+                    
+                    if call.function.name in ['bar_chart_tool', 'line_chart_tool', 'pie_chart_tool', 'histogram_tool']:
+                        try:
+                            conn = sqlite3.connect('intermediary.db')
+                            chart_df = pd.read_sql_query(args.get('sql_query'), conn)
+                        except Exception as e:
+                            print(f"Error getting chart data: {e}")
+                        finally:
+                            conn.close()
+                        
+                        chart_info = build_chart_info(call.function.name, args)
+                        if chart_info and chart_df is not None:
+                            chart_info['chart_data'] = chart_df.to_dict(orient='records')
+                            charts_info.append(chart_info)
+                
+                tool_outputs = [execute_tool_call(call) for call in tool_calls]
+                
+                try:
+                    run = client.beta.threads.runs.submit_tool_outputs(
+                        thread_id=thread.id,
+                        run_id=run.id,
+                        tool_outputs=tool_outputs
+                    )
+                except Exception as e:
+                    print(f"Error submitting tool outputs: {e}")
+                    break
             
-            tool_outputs = [execute_tool_call(call) for call in tool_calls]
+            time.sleep(0.1)
             
-            try:
-                run = client.beta.threads.runs.submit_tool_outputs(
-                    thread_id=thread.id,
-                    run_id=run.id,
-                    tool_outputs=tool_outputs
-                )
-            except Exception as e:
-                print(f"Error submitting tool outputs: {e}")
-                break
+        except Exception as e:
+            print(f"Error: {e}")
+            continue
     
     try:
         messages = openai.beta.threads.messages.list(thread_id=thread.id)
         annotations = messages.data[0].content[0].text.annotations
         message_content = messages.data[0].content[0].text.value
+        return annotations, message_content, charts_info
     except Exception as e:
         print(f"Error retrieving messages: {e}")
         return None, None, charts_info
-    
-    return annotations, message_content, charts_info
 
 def add_message(thread, message_content, role):
     return client.beta.threads.messages.create(

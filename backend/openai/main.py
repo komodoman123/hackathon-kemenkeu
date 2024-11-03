@@ -5,6 +5,7 @@ import sqlite3
 import pandas as pd
 from flask_cors import CORS
 from flask import Flask, request, jsonify
+from flask_socketio import SocketIO  # Add this import
 from function_definition import (
     mini_retrieve_similar_keywords_definition,
     intermediary_dataframe_retrieval_definition,
@@ -16,13 +17,12 @@ from function_definition import (
 )
 from basic_functions import deploy_assistant, add_message, run_assistant, get_answer
 
-# for first time use, deploy assistant and get the assistant.id
-
-
 app = Flask(__name__)
+CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")  
+
 os.environ['OPENAI_API_KEY'] = api_keys.openai_key
 
-CORS(app)
 all_tools = [mini_retrieve_similar_keywords_definition, 
              schema_check_definition, 
              intermediary_dataframe_retrieval_definition, 
@@ -30,9 +30,7 @@ all_tools = [mini_retrieve_similar_keywords_definition,
              line_chart_tool_definition,
              histogram_tool_definition,
              pie_chart_tool_definition]
-# assistant = deploy_assistant(all_tools)
-# assistant_id = assistant.id
-# print(assistant_id)
+
 threads = {}
 
 def get_intermediary_data():
@@ -56,16 +54,25 @@ def chat():
     
     thread = threads[session_id]
     
+    def progress_callback(status, msg):
+        print(f"Sending progress update: {msg}")  
+        socketio.emit('progress', {
+            'session_id': session_id,
+            'message': msg
+        })
+
+        socketio.sleep(0)
+    
     add_message(thread, question, role='user')
     run = run_assistant(
         assistant_id="asst_2Pna3kraHtUxZZSBXRljNQJM",
         thread=thread,
         question=question
     )
-    annotations, message_content, charts_info = get_answer(run, thread)  
+    
+    annotations, message_content, charts_info = get_answer(run, thread, progress_callback)
     add_message(thread, message_content, role='assistant')
     
-    # Get intermediary data if it exists
     df_data = get_intermediary_data()
     
     response = {
@@ -76,13 +83,18 @@ def chat():
     if df_data:
         response['data'] = df_data
     
-
     if charts_info:
         if not isinstance(charts_info, list):
-            charts_info = [charts_info]  
+            charts_info = [charts_info]
         response['charts_info'] = charts_info
     
     return jsonify(response)
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected to WebSocket')
 
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected from WebSocket')
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000)  # Change this line
