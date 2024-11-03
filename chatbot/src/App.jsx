@@ -26,6 +26,20 @@ const LoadingMessage = ({ message }) => (
   </div>
 );
 
+const LoadingPopup = ({ message }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
+    <div className="bg-white rounded-xl shadow-lg p-4 max-w-sm w-full mx-4">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-900">Processing your request</p>
+          <p className="text-sm text-gray-500 mt-1">{message || "Analyzing data..."}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -60,7 +74,9 @@ const ChatbotInterface = () => {
   const inputRef = useRef(null);
   const [placeholderText, setPlaceholderText] = useState("Type anything to generate analysis...");
   const socketRef = useRef(null);
+  const [loadingMessage, setLoadingMessage] = useState("");
 
+  
   const updateCharts = (newCharts, replaceAll = false) => {
     setCharts((prevCharts) => {
       const updatedCharts = replaceAll ? {} : { ...prevCharts };
@@ -133,19 +149,21 @@ const ChatbotInterface = () => {
 
     socketRef.current.on('progress', (data) => {
       if (data.session_id === sessionId) {
-
-        setMessages(prev => {
-          const newMessages = [...prev];
-
-          const loadingIndex = newMessages.findIndex(msg => msg.role === 'loading');
-          if (loadingIndex !== -1) {
-            newMessages[loadingIndex] = { role: 'loading', content: data.message };
-          } else {
-            newMessages.push({ role: 'loading', content: data.message });
-          }
-          return newMessages;
-        });
+        setLoadingMessage(data.message);
       }
+
+      //if (data.session_id === sessionId) {
+        // setMessages(prev => {
+        //   const newMessages = [...prev];
+        //   const loadingIndex = newMessages.findIndex(msg => msg.role === 'loading');
+        //   if (loadingIndex !== -1) {
+        //     newMessages[loadingIndex] = { role: 'loading', content: data.message };
+        //   } else {
+        //     newMessages.push({ role: 'loading', content: data.message });
+        //   }
+        //   return newMessages;
+        // });
+      //}
     });
     
     // Cleanup 
@@ -350,6 +368,7 @@ const sendMessage = async (e) => {
   
   if (message && !isLoading) {
     setIsLoading(true);
+    setLoadingMessage("Starting analysis...");
     setInputValue('');
     setMessages(prev => [...prev, { role: 'user', content: message }]);
 
@@ -422,7 +441,8 @@ const sendMessage = async (e) => {
       }]);
     }  finally {
       setIsLoading(false);
-      setMessages(prev => prev.filter(m => m.role !== 'loading'));
+      //setMessages(prev => prev.filter(m => m.role !== 'loading'));
+      setLoadingMessage(""); //
       inputRef.current?.focus();
     }
   }
@@ -479,6 +499,8 @@ const formatChartValue = (value, columnName) => {
   };
 
   return (
+    <>
+    {isLoading && <LoadingPopup message={loadingMessage} />}
     <div className="flex min-h-screen bg-gray-50 p-4">
       <div className={`mx-auto transition-all duration-300 ease-in-out ${
         isExpanding ? 'scale-95 opacity-90' : ''
@@ -728,6 +750,7 @@ const formatChartValue = (value, columnName) => {
         )}
       </div>
     </div>
+    </>
   );
 };
 
