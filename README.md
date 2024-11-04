@@ -25,7 +25,7 @@
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-
+SiRUPA, sebuah chatbot berbasis LLM Agent untuk mengoptimalkan akses data pengadaan pemerintah, baik dalam pengambilan keputusan rutin maupun situasi kritis. Melalui teknologi Generative AI dan NLP, SiRUPA dapat memodifikasi dan mengkonsolidasi database SiRUP, memungkinkan pencarian data yang lebih cepat dan akurat dengan hasil berupa tabel, infografis, dan insight yang relevan. Sistem ini berfungsi sebagai solusi atas tantangan aksesibilitas dan fragmentasi data yang selama ini menghambat pengambilan keputusan. Dengan fitur function calling agent, SiRUPA membantu pemangku kepentingan mengakses informasi secara intuitif dan lintas instansi, yang menjadi sangat krusial saat diperlukan respons cepat, sehingga meningkatkan efisiensi dan transparansi dalam pengelolaan anggaran.
 
 
 <!-- GETTING STARTED -->
@@ -73,7 +73,7 @@
 
 <!-- USAGE EXAMPLES -->
 ## Usage
-
+https://youtu.be/IbutU4Geihk
 
 
 
