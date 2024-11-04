@@ -67,7 +67,7 @@
 **backend will be at localhost://5000**
 
 **frontend will be at localhost://5173**
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 
 
 
@@ -76,5 +76,4 @@
 
 
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
